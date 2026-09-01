@@ -5,3 +5,5 @@ edition = "2024"
 
 [dependencies]
 crossterm = "0.29"
+libc = "0.2.189"
+mach2 = "0.7.0"

@@ -38,6 +38,7 @@ impl Drop for TerminalGuard {
 }
 
 pub fn render(
+    cpu_name: &str,
     uptime: &str,
     loadavg: &str,
     memory: &MemoryInfo,
@@ -52,6 +53,7 @@ pub fn render(
     write!(out, "======\r\n")?;
     write!(out, "\r\n")?;
 
+    write!(out, "CPU:    {cpu_name}\r\n")?;
     write!(out, "Uptime: {uptime}\r\n")?;
     write!(out, "Load:   {loadavg}\r\n")?;
 

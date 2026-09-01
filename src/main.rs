@@ -1,7 +1,6 @@
 mod cpu;
 mod memory;
 mod ui;
-mod uptime;
 mod platform;
 mod model;
 
@@ -56,6 +55,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let current = platform::collect_snapshot()?;
 
         render(
+            &current.cpu_name,
             &current.uptime,
             &current.loadavg,
             &current.memory,
