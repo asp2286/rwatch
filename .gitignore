@@ -1,0 +1,11 @@
+# Rust build output
+/target/
+rustc-ice-*.txt
+**/*.rs.bk
+
+# RustRover / JetBrains IDE files
+/.idea/
+*.iml
+
+# Local project archive
+/rwatch.zip
