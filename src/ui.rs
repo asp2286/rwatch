@@ -1,14 +1,15 @@
 use std::io::{self, Write, stdout};
 
 use crossterm::{
-    cursor::MoveTo,
-    execute,
+    cursor::{Hide, MoveTo, Show},
+    event::{DisableMouseCapture, EnableMouseCapture},
+    execute, queue,
     terminal::{
-        Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen,
-        disable_raw_mode, enable_raw_mode,
+        self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode,
+        enable_raw_mode,
     },
 };
-use crossterm::cursor::{Hide, Show};
+
 use crate::cpu::{cpu_usage, usage_bar};
 use crate::memory::kib_to_gib;
 use crate::model::SystemSnapshot;
@@ -23,6 +24,7 @@ impl TerminalGuard {
             stdout(),
             EnterAlternateScreen,
             Hide,
+            EnableMouseCapture,
             MoveTo(0, 0)
         )?;
 
@@ -32,83 +34,118 @@ impl TerminalGuard {
 
 impl Drop for TerminalGuard {
     fn drop(&mut self) {
-        let _ = disable_raw_mode();
+        let _ = execute!(stdout(), DisableMouseCapture, Show, LeaveAlternateScreen);
 
-        let _ = execute!(
-            stdout(),
-            Show,
-            LeaveAlternateScreen
-        );
+        let _ = disable_raw_mode();
     }
 }
 
-pub fn render(
-    previous: &SystemSnapshot,
-    current: &SystemSnapshot,
-) -> io::Result<()> {
-    let mut out = stdout();
+/// Number of terminal rows currently available for the frame.
+pub fn viewport_height() -> usize {
+    terminal::size().map(|(_, rows)| rows as usize).unwrap_or(0)
+}
 
-    execute!(
-        out,
-        MoveTo(0, 0)
-    )?;
-
+/// Builds the complete logical frame, one entry per line, without trailing
+/// newlines.
+pub fn build_frame(previous: &SystemSnapshot, current: &SystemSnapshot) -> Vec<String> {
     let core_count = current.cpu.len().saturating_sub(1);
 
-    write!(out, "rwatch\r\n")?;
-    write!(out, "======\r\n")?;
-    write!(out, "\r\n")?;
-
-    write!(out, "System: {}\r\n", current.system_name)?;
-    write!(out, "CPU:    {} × {}\r\n", current.cpu_name, core_count)?;
-    write!(out, "Uptime: {}\r\n", current.uptime)?;
-    write!(out, "Load:   {}\r\n", current.loadavg)?;
-
-    write!(out, "\r\n")?;
-    write!(out, "CPU:\r\n")?;
+    let mut lines = vec![
+        "rwatch".to_string(),
+        "======".to_string(),
+        String::new(),
+        format!("System: {}", current.system_name),
+        format!("CPU:    {} × {}", current.cpu_name, core_count),
+        format!("Uptime: {}", current.uptime),
+        format!("Load:   {}", current.loadavg),
+        String::new(),
+        "CPU:".to_string(),
+    ];
 
     for (before, after) in previous.cpu.iter().zip(current.cpu.iter()) {
         let usage = cpu_usage(&before.times, &after.times);
         let bar = usage_bar(usage, 20);
 
-        if before.name == "cpu" {
-            write!(out, "  {:<5} [{bar}] {:5.1}%\r\n", "Total", usage)?;
+        let name = if before.name == "cpu" {
+            "Total"
         } else {
-            write!(out, "  {:<5} [{bar}] {:5.1}%\r\n", before.name, usage)?;
-        }
+            before.name.as_str()
+        };
+
+        lines.push(format!("  {name:<5} [{bar}] {usage:5.1}%"));
     }
 
-    write!(out, "\r\n")?;
-    write!(out, "Memory:\r\n")?;
+    lines.push(String::new());
+    lines.push("Memory:".to_string());
 
-    write!(
-        out,
-        "  Total:      {:.2} GiB\r\n",
+    lines.push(format!(
+        "  Total:      {:.2} GiB",
         kib_to_gib(current.memory.total_kib)
-    )?;
+    ));
 
-    write!(
-        out,
-        "  Available:  {:.2} GiB\r\n",
+    lines.push(format!(
+        "  Available:  {:.2} GiB",
         kib_to_gib(current.memory.available_kib)
-    )?;
+    ));
 
-    write!(
-        out,
-        "  Used:       {:.2} GiB\r\n",
+    lines.push(format!(
+        "  Used:       {:.2} GiB",
         kib_to_gib(current.memory.used_kib())
-    )?;
+    ));
 
-    write!(
-        out,
-        "  Usage:      {:.1}%\r\n",
+    lines.push(format!(
+        "  Usage:      {:.1}%",
         current.memory.usage_percent()
-    )?;
+    ));
 
-    write!(out, "\r\n")?;
-    write!(out, "Updating every 1s — Ctrl+C or q to quit\r\n")?;
+    lines.push(String::new());
+    lines.push("Updating every 1s — Ctrl+C or q to quit".to_string());
 
-    execute!(out, Clear(ClearType::FromCursorDown))?;
-    
-    out.flush()
+    lines
+}
+
+/// Renders the visible portion of the frame for the current terminal size and
+/// returns the clamped scroll offset.
+pub fn render(
+    previous: &SystemSnapshot,
+    current: &SystemSnapshot,
+    scroll_offset: usize,
+) -> io::Result<usize> {
+    let (cols, rows) = terminal::size()?;
+    let cols = cols as usize;
+    let rows = rows as usize;
+
+    let lines = build_frame(previous, current);
+
+    let max_scroll = lines.len().saturating_sub(rows);
+    let scroll_offset = scroll_offset.min(max_scroll);
+
+    let mut out = stdout();
+
+    let mut visible_rows = 0usize;
+
+    for (row, line) in lines.iter().skip(scroll_offset).take(rows).enumerate() {
+        queue!(out, MoveTo(0, row as u16), Clear(ClearType::CurrentLine))?;
+
+        // Truncate to the terminal width so the line never wraps. No newline
+        // is written: every row is positioned explicitly, and a newline on the
+        // last row would scroll the terminal.
+        for ch in line.chars().take(cols) {
+            write!(out, "{ch}")?;
+        }
+
+        visible_rows += 1;
+    }
+
+    if visible_rows < rows {
+        queue!(
+            out,
+            MoveTo(0, visible_rows as u16),
+            Clear(ClearType::FromCursorDown)
+        )?;
+    }
+
+    out.flush()?;
+
+    Ok(scroll_offset)
 }
