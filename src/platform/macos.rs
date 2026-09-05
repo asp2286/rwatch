@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::ffi::CString;
-use std::{mem, ptr};
 use std::time::{SystemTime, UNIX_EPOCH};
+use std::{mem, ptr};
 
 use crate::cpu::{CpuSnapshot, CpuTimes};
 use crate::memory::MemoryInfo;
@@ -31,21 +31,15 @@ pub fn collect_snapshot() -> Result<SystemSnapshot, Box<dyn Error>> {
 fn read_loadavg() -> Result<String, Box<dyn Error>> {
     let mut values = [0.0_f64; 3];
 
-    let count = unsafe {
-        libc::getloadavg(values.as_mut_ptr(), values.len() as i32)
-    };
+    let count = unsafe { libc::getloadavg(values.as_mut_ptr(), values.len() as i32) };
 
     if count != 3 {
-        return Err(format!(
-            "getloadavg returned {count}, expected 3"
-        ).into());
+        return Err(format!("getloadavg returned {count}, expected 3").into());
     }
 
     Ok(format!(
         "{:.2} {:.2} {:.2}",
-        values[0],
-        values[1],
-        values[2]
+        values[0], values[1], values[2]
     ))
 }
 
@@ -69,9 +63,7 @@ fn read_uptime_seconds() -> Result<u64, Box<dyn Error>> {
         return Err(std::io::Error::last_os_error().into());
     }
 
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)?
-        .as_secs();
+    let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
 
     Ok(now - boot_time.tv_sec as u64)
 }
@@ -86,13 +78,11 @@ fn read_available_memory_kib() -> Result<u64, Box<dyn Error>> {
     unsafe {
         let host = mach_host_self();
 
-        let mut stats: libc::vm_statistics64 =
-            mem::zeroed();
+        let mut stats: libc::vm_statistics64 = mem::zeroed();
 
-        let mut count =
-            (mem::size_of::<libc::vm_statistics64>()
-                / mem::size_of::<libc::integer_t>())
-                as libc::mach_msg_type_number_t;
+        let mut count = (mem::size_of::<libc::vm_statistics64>()
+            / mem::size_of::<libc::integer_t>())
+            as libc::mach_msg_type_number_t;
 
         let result = libc::host_statistics64(
             host,
@@ -102,17 +92,12 @@ fn read_available_memory_kib() -> Result<u64, Box<dyn Error>> {
         );
 
         if result != libc::KERN_SUCCESS {
-            return Err(
-                format!("host_statistics64 failed: {result}").into()
-            );
+            return Err(format!("host_statistics64 failed: {result}").into());
         }
 
-        let available_pages =
-            stats.free_count as u64
-                + stats.inactive_count as u64;
+        let available_pages = stats.free_count as u64 + stats.inactive_count as u64;
 
-        let available_bytes =
-            available_pages * page_size;
+        let available_bytes = available_pages * page_size;
 
         Ok(available_bytes / 1024)
     }
@@ -147,10 +132,9 @@ fn read_total_cpu_snapshot() -> Result<CpuSnapshot, Box<dyn Error>> {
 
         let mut cpu_load: libc::host_cpu_load_info_data_t = mem::zeroed();
 
-        let mut count =
-            (mem::size_of::<libc::host_cpu_load_info_data_t>()
-                / mem::size_of::<libc::integer_t>())
-                as libc::mach_msg_type_number_t;
+        let mut count = (mem::size_of::<libc::host_cpu_load_info_data_t>()
+            / mem::size_of::<libc::integer_t>())
+            as libc::mach_msg_type_number_t;
 
         let result = libc::host_statistics(
             host,
@@ -160,31 +144,22 @@ fn read_total_cpu_snapshot() -> Result<CpuSnapshot, Box<dyn Error>> {
         );
 
         if result != libc::KERN_SUCCESS {
-            return Err(
-                format!("host_statistics failed: {result}").into()
-            );
+            return Err(format!("host_statistics failed: {result}").into());
         }
 
-        let user =
-            cpu_load.cpu_ticks[libc::CPU_STATE_USER as usize] as u64;
+        let user = cpu_load.cpu_ticks[libc::CPU_STATE_USER as usize] as u64;
 
-        let system =
-            cpu_load.cpu_ticks[libc::CPU_STATE_SYSTEM as usize] as u64;
+        let system = cpu_load.cpu_ticks[libc::CPU_STATE_SYSTEM as usize] as u64;
 
-        let idle =
-            cpu_load.cpu_ticks[libc::CPU_STATE_IDLE as usize] as u64;
+        let idle = cpu_load.cpu_ticks[libc::CPU_STATE_IDLE as usize] as u64;
 
-        let nice =
-            cpu_load.cpu_ticks[libc::CPU_STATE_NICE as usize] as u64;
+        let nice = cpu_load.cpu_ticks[libc::CPU_STATE_NICE as usize] as u64;
 
         let total = user + system + idle + nice;
 
         Ok(CpuSnapshot {
             name: "cpu".to_string(),
-            times: CpuTimes {
-                idle,
-                total,
-            },
+            times: CpuTimes { idle, total },
         })
     }
 }
@@ -206,9 +181,7 @@ fn read_per_core_cpu_snapshots() -> Result<Vec<CpuSnapshot>, Box<dyn Error>> {
         );
 
         if result != libc::KERN_SUCCESS {
-            return Err(
-                format!("host_processor_info failed: {result}").into()
-            );
+            return Err(format!("host_processor_info failed: {result}").into());
         }
 
         let mut snapshots = Vec::with_capacity(processor_count as usize);
@@ -216,17 +189,13 @@ fn read_per_core_cpu_snapshots() -> Result<Vec<CpuSnapshot>, Box<dyn Error>> {
         for cpu_index in 0..processor_count as usize {
             let base = cpu_index * libc::CPU_STATE_MAX as usize;
 
-            let user =
-                *processor_info.add(base + libc::CPU_STATE_USER as usize) as u64;
+            let user = *processor_info.add(base + libc::CPU_STATE_USER as usize) as u64;
 
-            let system =
-                *processor_info.add(base + libc::CPU_STATE_SYSTEM as usize) as u64;
+            let system = *processor_info.add(base + libc::CPU_STATE_SYSTEM as usize) as u64;
 
-            let idle =
-                *processor_info.add(base + libc::CPU_STATE_IDLE as usize) as u64;
+            let idle = *processor_info.add(base + libc::CPU_STATE_IDLE as usize) as u64;
 
-            let nice =
-                *processor_info.add(base + libc::CPU_STATE_NICE as usize) as u64;
+            let nice = *processor_info.add(base + libc::CPU_STATE_NICE as usize) as u64;
 
             snapshots.push(CpuSnapshot {
                 name: format!("cpu{cpu_index}"),
@@ -237,9 +206,7 @@ fn read_per_core_cpu_snapshots() -> Result<Vec<CpuSnapshot>, Box<dyn Error>> {
             });
         }
 
-        let byte_size =
-            processor_info_count as usize
-                * mem::size_of::<libc::integer_t>();
+        let byte_size = processor_info_count as usize * mem::size_of::<libc::integer_t>();
 
         let deallocate_result = libc::vm_deallocate(
             mach_task_self(),
@@ -248,9 +215,7 @@ fn read_per_core_cpu_snapshots() -> Result<Vec<CpuSnapshot>, Box<dyn Error>> {
         );
 
         if deallocate_result != libc::KERN_SUCCESS {
-            return Err(
-                format!("vm_deallocate failed: {deallocate_result}").into()
-            );
+            return Err(format!("vm_deallocate failed: {deallocate_result}").into());
         }
 
         Ok(snapshots)

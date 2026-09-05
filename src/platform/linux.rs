@@ -106,8 +106,7 @@ fn parse_cpu_times(line: &str) -> Result<CpuTimes, String> {
         .map(str::parse::<u64>)
         .collect();
 
-    let values =
-        values.map_err(|_| format!("Invalid CPU line: {line}"))?;
+    let values = values.map_err(|_| format!("Invalid CPU line: {line}"))?;
 
     if values.len() < 4 {
         return Err(format!("Not enough CPU values: {line}"));
@@ -125,15 +124,7 @@ fn parse_cpu_times(line: &str) -> Result<CpuTimes, String> {
 
     let idle_total = idle + iowait;
 
-    let total =
-        user
-            + nice
-            + system
-            + idle
-            + iowait
-            + irq
-            + softirq
-            + steal;
+    let total = user + nice + system + idle + iowait + irq + softirq + steal;
 
     Ok(CpuTimes {
         idle: idle_total,
@@ -162,10 +153,7 @@ fn read_cpu_name() -> Result<String, Box<dyn Error>> {
     Ok("Unknown CPU".to_string())
 }
 
-fn arm_cpu_name(
-    implementer: &str,
-    part: &str,
-) -> Option<&'static str> {
+fn arm_cpu_name(implementer: &str, part: &str) -> Option<&'static str> {
     match (implementer, part) {
         ("0x41", "0xd03") => Some("ARM Cortex-A53"),
         ("0x41", "0xd08") => Some("ARM Cortex-A72"),
@@ -195,9 +183,7 @@ fn read_system_name() -> Result<String, Box<dyn Error>> {
         .filter(|value| !value.is_empty());
 
     match (vendor, product) {
-        (Some(vendor), Some(product)) => {
-            Ok(format!("{vendor} {product}"))
-        }
+        (Some(vendor), Some(product)) => Ok(format!("{vendor} {product}")),
 
         (None, Some(product)) => Ok(product),
 
