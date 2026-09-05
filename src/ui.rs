@@ -22,7 +22,7 @@ impl TerminalGuard {
         execute!(
             stdout(),
             EnterAlternateScreen,
-            Clear(ClearType::All),
+            Hide,
             MoveTo(0, 0)
         )?;
 
@@ -34,39 +34,45 @@ impl Drop for TerminalGuard {
     fn drop(&mut self) {
         let _ = disable_raw_mode();
 
-        let _ = execute!(stdout(), LeaveAlternateScreen);
+        let _ = execute!(
+            stdout(),
+            Show,
+            LeaveAlternateScreen
+        );
     }
 }
 
 pub fn render(
-    cpu_name: &str,
-    uptime: &str,
-    loadavg: &str,
-    memory: &MemoryInfo,
-    previous_cpu: &[CpuSnapshot],
-    current_cpu: &[CpuSnapshot],
+    previous: &SystemSnapshot,
+    current: &SystemSnapshot,
 ) -> io::Result<()> {
     let mut out = stdout();
 
-    execute!(out, MoveTo(0, 0), Clear(ClearType::All))?;
+    execute!(
+        out,
+        MoveTo(0, 0)
+    )?;
+
+    let core_count = current.cpu.len().saturating_sub(1);
 
     write!(out, "rwatch\r\n")?;
     write!(out, "======\r\n")?;
     write!(out, "\r\n")?;
 
-    write!(out, "CPU:    {cpu_name}\r\n")?;
-    write!(out, "Uptime: {uptime}\r\n")?;
-    write!(out, "Load:   {loadavg}\r\n")?;
+    write!(out, "System: {}\r\n", current.system_name)?;
+    write!(out, "CPU:    {} × {}\r\n", current.cpu_name, core_count)?;
+    write!(out, "Uptime: {}\r\n", current.uptime)?;
+    write!(out, "Load:   {}\r\n", current.loadavg)?;
 
     write!(out, "\r\n")?;
     write!(out, "CPU:\r\n")?;
 
-    for (before, after) in previous_cpu.iter().zip(current_cpu.iter()) {
+    for (before, after) in previous.cpu.iter().zip(current.cpu.iter()) {
         let usage = cpu_usage(&before.times, &after.times);
         let bar = usage_bar(usage, 20);
 
         if before.name == "cpu" {
-            write!(out, "  Total  [{bar}] {:5.1}%\r\n", usage)?;
+            write!(out, "  {:<5} [{bar}] {:5.1}%\r\n", "Total", usage)?;
         } else {
             write!(out, "  {:<5} [{bar}] {:5.1}%\r\n", before.name, usage)?;
         }
