@@ -10,6 +10,8 @@ use crate::model::SystemSnapshot;
 use mach2::mach_init::mach_host_self;
 use mach2::traps::mach_task_self;
 
+use crate::uptime::format_uptime;
+
 pub fn collect_snapshot() -> Result<SystemSnapshot, Box<dyn Error>> {
     let total_kib = read_total_memory_kib()?;
     let available_kib = read_available_memory_kib()?;
@@ -72,15 +74,6 @@ fn read_uptime_seconds() -> Result<u64, Box<dyn Error>> {
         .as_secs();
 
     Ok(now - boot_time.tv_sec as u64)
-}
-
-fn format_uptime(total_seconds: u64) -> String {
-    let days = total_seconds / 86_400;
-    let hours = (total_seconds % 86_400) / 3_600;
-    let minutes = (total_seconds % 3_600) / 60;
-    let seconds = total_seconds % 60;
-
-    format!("{days}d {hours:02}h {minutes:02}m {seconds:02}s")
 }
 
 fn read_total_memory_kib() -> Result<u64, Box<dyn Error>> {

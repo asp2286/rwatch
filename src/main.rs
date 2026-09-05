@@ -3,6 +3,7 @@ mod memory;
 mod ui;
 mod platform;
 mod model;
+mod uptime;
 
 use std::error::Error;
 use std::time::{Duration, Instant};

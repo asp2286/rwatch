@@ -1,10 +1,10 @@
 use std::error::Error;
 use std::fs;
 
-use crate::cpu::read_cpu_snapshots;
-use crate::memory::parse_memory_info;
+use crate::cpu::{CpuSnapshot, CpuTimes};
+use crate::memory::MemoryInfo;
 use crate::model::SystemSnapshot;
-use crate::uptime::{format_uptime, parse_uptime_seconds};
+use crate::uptime::format_uptime;
 
 pub fn collect_snapshot() -> Result<SystemSnapshot, Box<dyn Error>> {
     let uptime_raw = fs::read_to_string("/proc/uptime")?;
