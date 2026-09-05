@@ -56,12 +56,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         let current = platform::collect_snapshot()?;
 
         render(
-            &current.cpu_name,
-            &current.uptime,
-            &current.loadavg,
-            &current.memory,
-            &previous.cpu,
-            &current.cpu,
+            &previous,
+            &current,
         )?;
 
         previous = current;

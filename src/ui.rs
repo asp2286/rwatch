@@ -4,13 +4,14 @@ use crossterm::{
     cursor::MoveTo,
     execute,
     terminal::{
-        Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode,
-        enable_raw_mode,
+        Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen,
+        disable_raw_mode, enable_raw_mode,
     },
 };
-
-use crate::cpu::{CpuSnapshot, cpu_usage, usage_bar};
-use crate::memory::{MemoryInfo, kib_to_gib};
+use crossterm::cursor::{Hide, Show};
+use crate::cpu::{cpu_usage, usage_bar};
+use crate::memory::kib_to_gib;
+use crate::model::SystemSnapshot;
 
 pub struct TerminalGuard;
 
@@ -77,25 +78,31 @@ pub fn render(
     write!(
         out,
         "  Total:      {:.2} GiB\r\n",
-        kib_to_gib(memory.total_kib)
+        kib_to_gib(current.memory.total_kib)
     )?;
 
     write!(
         out,
         "  Available:  {:.2} GiB\r\n",
-        kib_to_gib(memory.available_kib)
+        kib_to_gib(current.memory.available_kib)
     )?;
 
     write!(
         out,
         "  Used:       {:.2} GiB\r\n",
-        kib_to_gib(memory.used_kib())
+        kib_to_gib(current.memory.used_kib())
     )?;
 
-    write!(out, "  Usage:      {:.1}%\r\n", memory.usage_percent())?;
+    write!(
+        out,
+        "  Usage:      {:.1}%\r\n",
+        current.memory.usage_percent()
+    )?;
 
     write!(out, "\r\n")?;
-    write!(out, "Updating every 1s — Ctrl+C to quit\r\n")?;
+    write!(out, "Updating every 1s — Ctrl+C or q to quit\r\n")?;
 
+    execute!(out, Clear(ClearType::FromCursorDown))?;
+    
     out.flush()
 }
