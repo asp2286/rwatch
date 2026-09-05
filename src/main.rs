@@ -66,6 +66,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let refresh_interval = Duration::from_secs(1);
 
     let mut previous = platform::collect_snapshot()?;
+    let mut current = platform::collect_snapshot()?;
+    let mut scroll_offset = 0usize;
+
+    scroll_offset = render(&previous, &current, scroll_offset)?;
+
     let mut next_refresh = Instant::now() + refresh_interval;
 
     loop {
@@ -74,35 +79,28 @@ fn main() -> Result<(), Box<dyn Error>> {
         let timeout = next_refresh.saturating_duration_since(now);
 
         if event::poll(timeout)? {
-            match event::read()? {
-                Event::Key(key) if key.kind == KeyEventKind::Press => {
-                    let ctrl_c =
-                        key.code == KeyCode::Char('c')
-                            && key.modifiers.contains(KeyModifiers::CONTROL);
-
-                    let q = key.code == KeyCode::Char('q');
-
-                    if ctrl_c || q {
-                        break;
-                    }
-                }
-
-                _ => {
-                    // Mouse, resize, other keys — ignore.
-                }
+            // Input only changes the viewport; it never re-samples metrics, so
+            // the fixed refresh cadence below is unaffected.
+            match action_for(event::read()?) {
+                Action::Quit => break,
+                Action::ScrollUp(n) => scroll_offset = scroll_offset.saturating_sub(n),
+                Action::ScrollDown(n) => scroll_offset = scroll_offset.saturating_add(n),
+                Action::ScrollToTop => scroll_offset = 0,
+                Action::ScrollToBottom => scroll_offset = usize::MAX,
+                Action::Redraw => {}
+                Action::None => continue,
             }
+
+            // render() clamps the offset to the current frame and viewport.
+            scroll_offset = render(&previous, &current, scroll_offset)?;
 
             continue;
         }
 
-        let current = platform::collect_snapshot()?;
-
-        render(
-            &previous,
-            &current,
-        )?;
-
         previous = current;
+        current = platform::collect_snapshot()?;
+
+        scroll_offset = render(&previous, &current, scroll_offset)?;
 
         next_refresh += refresh_interval;
     }
