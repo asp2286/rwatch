@@ -176,11 +176,41 @@ fn arm_cpu_name(
 }
 
 fn read_system_name() -> Result<String, Box<dyn Error>> {
-    let cpuinfo = fs::read_to_string("/proc/cpuinfo")?;
+    if let Ok(model) = fs::read_to_string("/proc/device-tree/model") {
+        let model = model.trim_matches('\0').trim();
 
-    Ok(
-        find_cpuinfo_value(&cpuinfo, "Model")
-            .unwrap_or("Unknown system")
-            .to_string()
-    )
+        if !model.is_empty() {
+            return Ok(model.to_string());
+        }
+    }
+
+    let vendor = fs::read_to_string("/sys/class/dmi/id/sys_vendor")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+
+    let product = fs::read_to_string("/sys/class/dmi/id/product_name")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+
+    match (vendor, product) {
+        (Some(vendor), Some(product)) => {
+            Ok(format!("{vendor} {product}"))
+        }
+
+        (None, Some(product)) => Ok(product),
+
+        (Some(vendor), None) => Ok(vendor),
+
+        _ => {
+            let cpuinfo = fs::read_to_string("/proc/cpuinfo")?;
+
+            if let Some(model) = find_cpuinfo_value(&cpuinfo, "Model") {
+                return Ok(model.to_string());
+            }
+
+            Ok("Unknown system".to_string())
+        }
+    }
 }
